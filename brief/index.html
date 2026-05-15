@@ -315,7 +315,7 @@
   <div class="app">
     <header>
       <a class="brand" href="/">BIZZ<span>ON</span>.AI</a>
-      <div class="status" id="status">Rozmowa startowa</div>
+      <div class="status" id="status">Tryb podglądu</div>
     </header>
 
     <main>
@@ -342,20 +342,22 @@
           <h2>AI Pack</h2>
           <p>49 PLN. Najpierw rozmowa, potem dopasowany zestaw: prompty, wiadomości, checklisty i instrukcja krok po kroku.</p>
           <div class="actions">
-            <a class="button primary" href="https://buy.stripe.com/bJe00i3Oc5nKg6w2oh6J200">Kup przez Stripe</a>
+            <a class="button primary" href="https://buy.stripe.com/bJe4gs6Bnf1u0KY2Vo67S00">Kup przez Stripe</a>
             <a class="button" href="https://facebook.com/bizzonai">BIZZON.AI na Facebooku</a>
           </div>
         </section>
 
         <section class="panel">
           <h2>Dostawa</h2>
-          <p>Pierwsze zamówienia są dopilnowane ręcznie/półautomatycznie, dopóki pełny backend po Stripe nie jest publicznie spięty.</p>
+          <p>Pierwsze zamówienia są dopilnowane ręcznie lub półautomatycznie, dopóki pełny backend po Stripe nie jest publicznie spięty.</p>
           <p class="danger" id="delivery-note">Bez reklam, boostów i płatnych automatyzacji.</p>
         </section>
 
         <section class="panel receipt" id="receipt">
           <h2>Zapis rozmowy</h2>
+          <p id="receipt-note">Po opłaconej sesji spróbuję wysłać brief do BIZZON.AI. Jeśli backend nie jest publiczny, zostanie ręczny fallback.</p>
           <div class="actions">
+            <button type="button" class="primary" id="submit-brief">Wyślij do Bizzon</button>
             <button type="button" class="primary" id="email">Wyślij rozmowę</button>
             <button type="button" id="copy">Kopia techniczna</button>
           </div>
@@ -435,10 +437,17 @@
     const voice = document.getElementById("voice");
     const mute = document.getElementById("mute");
     const receipt = document.getElementById("receipt");
+    const receiptNote = document.getElementById("receipt-note");
     const transcriptBox = document.getElementById("transcript");
+    const submitBriefButton = document.getElementById("submit-brief");
     const email = document.getElementById("email");
     const copy = document.getElementById("copy");
     const status = document.getElementById("status");
+    const deliveryNote = document.getElementById("delivery-note");
+    const sessionId = new URLSearchParams(window.location.search).get("session_id") || "";
+    const activeQuestions = sessionId
+      ? questions.filter((question) => question.key !== "purchase_status")
+      : questions;
 
     let index = 0;
     let answers = {};
@@ -446,6 +455,7 @@
     let speakEnabled = true;
     let recognition = null;
     let complete = false;
+    let briefSubmitted = false;
 
     boot();
 
@@ -471,12 +481,24 @@
         voice.textContent = "Mów";
       }
     });
+    submitBriefButton.addEventListener("click", submitBrief);
     email.addEventListener("click", openEmail);
     copy.addEventListener("click", copyTranscript);
 
     function boot() {
       setupVoice();
-      say("Ekhm. Chrum. Jestem Bizzon. Nie dam Ci formularza do wypełnienia, tylko normalnie dopytam. Krótko, konkretnie, bez korpo mgły.");
+      if (sessionId) {
+        status.textContent = "Opłacona sesja wykryta";
+        deliveryNote.textContent = `Sesja Stripe: ${sessionId}. Rozmowa zapisze kontekst do ręcznej lub półautomatycznej realizacji.`;
+        receiptNote.textContent = "Po kliknięciu spróbuję wysłać ten brief do backendu BIZZON.AI. Jeśli endpoint nie jest publiczny, zostanie mailto i kopia techniczna.";
+        say("Ekhm. Chrum. Jestem Bizzon. Widzę opłaconą sesję Stripe, więc lecimy od razu z rozmową po zakupie. Krótko, konkretnie, bez korpo mgły.");
+      } else {
+        status.textContent = "Tryb podglądu";
+        deliveryNote.textContent = "To tryb podglądu albo rozmowa przed zakupem. Po płatności wróć tutaj z linku po Stripe albo kliknij kupno po prawej.";
+        receiptNote.textContent = "Bez `session_id` zapis rozmowy zostaje tylko w ręcznym fallbacku.";
+        submitBriefButton.disabled = true;
+        say("Ekhm. Chrum. Jestem Bizzon. Nie dam Ci formularza do wypełnienia, tylko normalnie dopytam. Krótko, konkretnie, bez korpo mgły.");
+      }
       ask();
     }
 
@@ -507,12 +529,12 @@
     }
 
     function ask() {
-      const question = questions[index];
+      const question = activeQuestions[index];
       if (!question) {
         finish();
         return;
       }
-      progress.textContent = `Pytanie ${index + 1}/${questions.length}`;
+      progress.textContent = `Pytanie ${index + 1}/${activeQuestions.length}`;
       say(question.text);
       renderChoices(question.choices || []);
       input.value = "";
@@ -552,7 +574,7 @@
         return;
       }
 
-      const question = questions[index];
+      const question = activeQuestions[index];
       answers[question.key] = value;
       user(value);
 
@@ -571,7 +593,7 @@
         send.disabled = false;
       }
       index = Math.max(0, index - 1);
-      delete answers[questions[index].key];
+      delete answers[activeQuestions[index].key];
       say("Cofamy o jedno pytanie. Poprawmy to bez dramatu.");
       ask();
     }
@@ -581,6 +603,7 @@
       send.disabled = true;
       progress.textContent = "Rozmowa gotowa";
       status.textContent = "Gotowe do wysłania";
+      submitBriefButton.disabled = !sessionId;
       const summary = buildSummary();
       transcriptBox.value = summary;
       receipt.classList.add("visible");
@@ -623,13 +646,95 @@
       const lines = [
         "BIZZON.AI - zapis rozmowy po zakupie",
         `Data: ${new Date().toLocaleString("pl-PL")}`,
+        `Tryb: ${sessionId ? "oplacona_sesja" : "podglad_lub_przed_zakupem"}`,
+        `Stripe session: ${sessionId || "(brak)"}`,
         "",
-        ...questions.map((question) => {
+        ...activeQuestions.map((question) => {
           const answerText = answers[question.key] || "(brak)";
           return `${question.text}\n${answerText}\n`;
         })
       ];
       return lines.join("\n");
+    }
+
+    function buildBriefPayload() {
+      const answer = (key) => (answers[key] || "").trim();
+      const purchaseStatus = answer("purchase_status") || (sessionId ? "Kupiłem/kupiłam" : "");
+      const repeatedWork = answer("repeated_work");
+      const timeSink = answer("time_sink");
+      const tools = answer("tools");
+      const integrationHelp = answer("integration_help");
+      const stockProduction = answer("stock_production");
+      const customers = answer("customers");
+      const competitorBrands = answer("competitors");
+      const nonCompetitorBrands = answer("not_competitors");
+      const limits = answer("limits");
+
+      return {
+        session_id: sessionId,
+        buyer_handle: answer("name") || null,
+        vertical_description: answer("business"),
+        customer_segment: customers || "Nie podano segmentu klienta; do doprecyzowania ręcznie.",
+        current_workflow: [repeatedWork, integrationHelp].filter(Boolean).join("\n\n"),
+        top_pain: timeSink || repeatedWork,
+        biggest_challenges: [repeatedWork, timeSink, limits].filter(Boolean).join("\n\n"),
+        time_sinks: [repeatedWork, timeSink].filter(Boolean).join("\n\n"),
+        tools_stack: tools || "Nie podano narzędzi.",
+        list_size: "unknown_manual_fallback",
+        brand_voice: answer("brand_voice") || "Konkretnie",
+        focus_area: integrationHelp || repeatedWork || timeSink,
+        success_metric: answer("success"),
+        offer_details: purchaseStatus ? `Status zakupu w rozmowie: ${purchaseStatus}` : null,
+        channels: customers || null,
+        integration_targets: integrationHelp || null,
+        stock_production_context: stockProduction || null,
+        competitor_brands: competitorBrands || null,
+        non_competitor_brands: nonCompetitorBrands || null,
+        constraints: limits || null,
+        returning_context: `brief-fallback; stripe_session=${sessionId || "(brak)"}; origin=${window.location.origin}`,
+      };
+    }
+
+    async function submitBrief() {
+      if (!complete || !sessionId || briefSubmitted) return;
+      submitBriefButton.disabled = true;
+      submitBriefButton.textContent = "Wysyłam...";
+      receiptNote.textContent = "Próba wysłania briefu do backendu BIZZON.AI.";
+
+      try {
+        const response = await fetch("/api/brief", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(buildBriefPayload()),
+        });
+
+        const contentType = response.headers.get("content-type") || "";
+        let body = {};
+        if (contentType.includes("application/json")) {
+          body = await response.json();
+        } else {
+          const text = await response.text();
+          throw new Error(text.trim().startsWith("<!doctype html") ? "publiczny backend /api/brief nie jest jeszcze podpięty" : `nieoczekiwana odpowiedź HTTP ${response.status}`);
+        }
+
+        if (!response.ok) {
+          throw new Error(body.error || `HTTP ${response.status}`);
+        }
+
+        briefSubmitted = true;
+        status.textContent = "Brief przyjęty przez backend";
+        receiptNote.textContent = body.message || "Brief odebrany. Pack ląduje do kolejki realizacji.";
+        submitBriefButton.textContent = "Wysłane";
+        send.disabled = true;
+        back.disabled = true;
+        say("Brief został przyjęty przez backend. Dalej idzie już kolejka Bizzon: generowanie, ocena i dostawa.");
+      } catch (error) {
+        submitBriefButton.disabled = false;
+        submitBriefButton.textContent = "Spróbuj wysłać ponownie";
+        receiptNote.textContent = `Backend niedostępny albo sesja nie jest jeszcze gotowa: ${error.message}. Użyj mailto albo skopiuj zapis do ręcznego fallbacku.`;
+        status.textContent = "Fallback ręczny";
+        say("Backend nie przyjął jeszcze briefu. To znaczy ręczny fallback, nie magia. Skopiuj zapis albo wyślij maila.");
+      }
     }
 
     function openEmail() {
