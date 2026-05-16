@@ -309,6 +309,20 @@
       textarea { grid-column: 1 / -1; min-height: 76px; }
       .bubble { max-width: 94%; }
     }
+
+    .legal-foot {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 16px;
+      padding: 0 0 24px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .legal-foot a {
+      color: inherit;
+      font-weight: 800;
+    }
   </style>
 </head>
 <body>
@@ -365,6 +379,13 @@
         </section>
       </aside>
     </main>
+    <footer class="legal-foot">
+      <a href="/regulamin/">Regulamin</a>
+      <a href="/polityka-prywatnosci/">Polityka prywatności</a>
+      <a href="/zwroty-reklamacje/">Zwroty i reklamacje</a>
+      <a href="/cookies/">Cookies</a>
+      <span>Sprzedawca: Fundacja Lokalny Certyfikowany, KRS 0000503517, NIP 5242768061.</span>
+    </footer>
   </div>
 
   <script>
@@ -497,7 +518,7 @@
         deliveryNote.textContent = "To tryb podglądu albo rozmowa przed zakupem. Po płatności wróć tutaj z linku po Stripe albo kliknij kupno po prawej.";
         receiptNote.textContent = "Bez `session_id` zapis czatu zostaje tylko w ręcznym fallbacku.";
         submitChatButton.disabled = true;
-        say("Ekhm. Chrum. Jestem Bizzon. Nie dam Ci formularza do wypełnienia, tylko normalnie dopytam. Krótko, konkretnie, bez korpo mgły.");
+        say("Ekhm. Chrum. Jestem Bizzon. Przejdziemy to normalną rozmową. Krótko, konkretnie, bez korpo mgły.");
       }
       ask();
     }
