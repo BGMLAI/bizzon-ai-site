@@ -578,5 +578,19 @@ Kurs uczy Cię godzinami — my dajemy gotowe do użycia teksty pod Twoją firm�
       <div>BIZZON.AI. Facebook: facebook.com/bizzonai. Instagram poza zakresem tego startu.</div>
     </div>
   </footer>
+  <script>
+    (() => {
+      const allowed = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"];
+      const incoming = new URLSearchParams(window.location.search);
+      const attribution = allowed.filter((key) => incoming.has(key));
+      if (!attribution.length) return;
+
+      document.querySelectorAll('a[href^="https://buy.stripe.com/"]').forEach((link) => {
+        const checkout = new URL(link.href);
+        attribution.forEach((key) => checkout.searchParams.set(key, incoming.get(key)));
+        link.href = checkout.toString();
+      });
+    })();
+  </script>
 </body>
 </html>
